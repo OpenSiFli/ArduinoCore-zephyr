@@ -121,10 +121,17 @@ describe("package index generation", () => {
   test("uses sftool to burn the packaged bootloader", () => {
     const board = readText("boards.txt");
     const platform = readText("platform.txt");
+    const programmers = readText("programmers.txt");
 
+    expect(board).toContain("sf32lb52devkitlcd.programmer.default=sifli");
     expect(board).toContain("sf32lb52devkitlcd.bootloader.ftab.file=zephyr-{build.variant}.ftab.hex");
     expect(board).not.toContain("sf32lb52devkitlcd.bootloader.ftab.address=");
     expect(board).toContain("sf32lb52devkitlcd.bootloader.address=0x12010000");
+    expect(programmers).toContain("sifli.name=SiFli sftool");
+    expect(programmers).toContain("sifli.program.tool=sifli");
+    expect(platform).toContain(
+      'tools.sifli.program.pattern="{path}/{cmd}" --chip SF32LB52 --port "{serial.port}" write_flash "{build.path}/{build.project_name}.{upload.extension}@{upload.address}"',
+    );
     expect(platform).toContain(
       'tools.sifli.bootloader.pattern="{path}/{cmd}" --chip SF32LB52 --port "{serial.port}" write_flash "{runtime.platform.path}/bootloaders/{bootloader.ftab.file}" "{runtime.platform.path}/bootloaders/{bootloader.file}@{bootloader.address}"',
     );

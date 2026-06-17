@@ -21,3 +21,11 @@ openocd.protocol=SWD
 openocd.program.tool=openocd
 openocd.program.tool.default=openocd
 openocd.program.extra_params=
+
+sifli.name=SiFli sftool
+sifli.communication=serial
+sifli.protocol=
+sifli.program.protocol=
+sifli.program.tool=sifli
+sifli.program.tool.default=sifli
+sifli.program.extra_params=
