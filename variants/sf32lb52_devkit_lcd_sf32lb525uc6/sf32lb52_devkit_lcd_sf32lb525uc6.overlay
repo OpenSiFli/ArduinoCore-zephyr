@@ -1,0 +1,267 @@
+/*
+ * Copyright (c) Arduino s.r.l. and/or its affiliated companies
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+#include <zephyr/dt-bindings/pinctrl/sf32lb52x-pinctrl.h>
+#include <zephyr/dt-bindings/pwm/pwm.h>
+#include <zephyr/dt-bindings/adc/adc.h>
+
+/*
+ * Flash layout (py25q128ha, 16MB total):
+ *   0x000000 - 0x00FFFF : ptable  (64KB,  from board DTS, unchanged)
+ *   0x010000 - 0x10FFFF : code    (1MB,   loader binary — shrunk from original 16320KB)
+ *   0x110000 - 0xFFFFFF : user_sketch (~14.9MB, where Arduino sketches are stored)
+ *
+ * The original board DTS sets code=16320KB which fills all remaining flash.
+ * We shrink it to 1MB and allocate the rest to user_sketch.
+ */
+
+/* Shrink the loader code partition to 1MB */
+&code {
+	reg = <0x10000 DT_SIZE_K(1024)>;
+};
+
+/* Add the user_sketch partition in the remaining flash space */
+&py25q128ha {
+	/*
+	 * Mark the flash node as soc-nv-flash so DT_MTD_FROM_FIXED_PARTITION()
+	 * resolves partitions to the parent controller device (&mpi2) instead of
+	 * to the flash child node itself.
+	 */
+	compatible = "puya,py25q128ha", "jedec,qspi-nor", "soc-nv-flash";
+	reg = <0x12000000 DT_SIZE_M(16)>;
+
+	partitions {
+		user_sketch: partition@110000 {
+			label = "user_sketch";
+			/* 0x1000000 - 0x110000 = 0xEF0000 (~14.9MB) */
+			reg = <0x110000 0xEF0000>;
+		};
+	};
+};
+
+/ {
+	zephyr,user {
+		/*
+		 * Arduino digital pin index -> SoC pin:
+		 *   D0..D9    -> PA0..PA9
+		 *   D10       -> PA11   (key2 on this board, active high)
+		 *   D11       -> PA20
+		 *   D12       -> PA22   (also LXT32 XI on this board)
+		 *   D13       -> PA23   (also LXT32 XO on this board)
+		 *   D14 MOSI  -> PA24   (SPI1 DIO)
+		 *   D15 MISO  -> PA25   (SPI1 DI)
+		 *   D16 LED   -> PA26
+		 *   D17       -> PA27
+		 *   D18 SCK   -> PA28   (SPI1 CLK / GPADC CH0 / A0)
+		 *   D19 SS    -> PA29   (SPI1 CS  / GPADC CH1 / A1)
+		 *   D20 SCL   -> PA30   (I2C1 SCL / GPADC CH2 / A2)
+		 *   D21       -> PA31   (GPADC CH3 / A3)
+		 *   D22 SDA   -> PA33   (I2C1 SDA / GPADC CH5 / A4)
+		 *   D23       -> PA34   (key1 on this board, active high / GPADC CH6 / A5)
+		 *   D24..D30  -> PA37..PA43
+		 *   D31       -> PA32   (GPADC CH4 / A6, may not be on header)
+		 */
+		digital-pin-gpios =
+			<&gpioa_00_31 0 GPIO_ACTIVE_HIGH>,
+			<&gpioa_00_31 1 GPIO_ACTIVE_HIGH>,
+			<&gpioa_00_31 2 GPIO_ACTIVE_HIGH>,
+			<&gpioa_00_31 3 GPIO_ACTIVE_HIGH>,
+			<&gpioa_00_31 4 GPIO_ACTIVE_HIGH>,
+			<&gpioa_00_31 5 GPIO_ACTIVE_HIGH>,
+			<&gpioa_00_31 6 GPIO_ACTIVE_HIGH>,
+			<&gpioa_00_31 7 GPIO_ACTIVE_HIGH>,
+			<&gpioa_00_31 8 GPIO_ACTIVE_HIGH>,
+			<&gpioa_00_31 9 GPIO_ACTIVE_HIGH>,
+			<&gpioa_00_31 11 GPIO_ACTIVE_HIGH>, /* key2, active high */
+			<&gpioa_00_31 20 GPIO_ACTIVE_HIGH>,
+			<&gpioa_00_31 22 GPIO_ACTIVE_HIGH>,
+			<&gpioa_00_31 23 GPIO_ACTIVE_HIGH>,
+			<&gpioa_00_31 24 GPIO_ACTIVE_HIGH>, /* SPI MOSI */
+			<&gpioa_00_31 25 GPIO_ACTIVE_HIGH>, /* SPI MISO */
+			<&gpioa_00_31 26 GPIO_ACTIVE_LOW>,  /* builtin LED, active low */
+			<&gpioa_00_31 27 GPIO_ACTIVE_HIGH>,
+			<&gpioa_00_31 28 GPIO_ACTIVE_HIGH>, /* SPI CLK / A0 */
+			<&gpioa_00_31 29 GPIO_ACTIVE_HIGH>, /* SPI CS  / A1 */
+			<&gpioa_00_31 30 GPIO_ACTIVE_HIGH>, /* I2C SCL / A2 */
+			<&gpioa_00_31 31 GPIO_ACTIVE_HIGH>, /* A3 */
+			<&gpioa_32_44 1 GPIO_ACTIVE_HIGH>,  /* PA33, I2C SDA / A4 */
+			<&gpioa_32_44 2 GPIO_ACTIVE_HIGH>,  /* PA34, key1, active high / A5 */
+			<&gpioa_32_44 5 GPIO_ACTIVE_HIGH>,  /* PA37 */
+			<&gpioa_32_44 6 GPIO_ACTIVE_HIGH>,  /* PA38 */
+			<&gpioa_32_44 7 GPIO_ACTIVE_HIGH>,  /* PA39 */
+			<&gpioa_32_44 8 GPIO_ACTIVE_HIGH>,  /* PA40 */
+			<&gpioa_32_44 9 GPIO_ACTIVE_HIGH>,  /* PA41 */
+			<&gpioa_32_44 10 GPIO_ACTIVE_HIGH>, /* PA42 */
+			<&gpioa_32_44 11 GPIO_ACTIVE_HIGH>, /* PA43 */
+			<&gpioa_32_44 0 GPIO_ACTIVE_HIGH>;  /* PA32 / A6 */
+
+		builtin-led-gpios = <&gpioa_00_31 26 GPIO_ACTIVE_LOW>;
+		serials = <&usart1>;
+		i2cs = <&i2c1>;
+		spis = <&spi1>;
+
+		/*
+		 * ADC channels (Arduino A0..A6 -> GPADC CH0..CH6).
+		 * adc-pin-gpios must reference the same GPIO phandle/pin as in
+		 * digital-pin-gpios so the analog pin number is resolved.
+		 */
+		io-channels =
+			<&gpadc 0>, <&gpadc 1>, <&gpadc 2>, <&gpadc 3>,
+			<&gpadc 5>, <&gpadc 6>, <&gpadc 4>;
+		adc-pin-gpios =
+			<&gpioa_00_31 28 GPIO_ACTIVE_HIGH>, /* PA28 -> CH0 -> A0 */
+			<&gpioa_00_31 29 GPIO_ACTIVE_HIGH>, /* PA29 -> CH1 -> A1 */
+			<&gpioa_00_31 30 GPIO_ACTIVE_HIGH>, /* PA30 -> CH2 -> A2 */
+			<&gpioa_00_31 31 GPIO_ACTIVE_HIGH>, /* PA31 -> CH3 -> A3 */
+			<&gpioa_32_44 1 GPIO_ACTIVE_HIGH>,  /* PA33 -> CH5 -> A4 */
+			<&gpioa_32_44 2 GPIO_ACTIVE_HIGH>,  /* PA34 -> CH6 -> A5 */
+			<&gpioa_32_44 0 GPIO_ACTIVE_HIGH>;  /* PA32 -> CH4 -> A6 */
+
+		/*
+		 * PWM mapping (hardcoded pinctrl at build time).
+		 *   D0 PA0 -> ATIM1 CH1
+		 *   D1 PA1 -> ATIM1 CH2
+		 *   D2 PA2 -> ATIM1 CH3
+		 *   D3 PA3 -> ATIM1 CH4
+		 *   D4 PA4 -> GPTIM2 CH1
+		 *   D5 PA5 -> GPTIM2 CH2
+		 *   D6 PA6 -> GPTIM2 CH3
+		 *   D7 PA7 -> GPTIM2 CH4
+		 */
+		pwms =
+			<&atim1_pwm 0 PWM_USEC(255) PWM_POLARITY_NORMAL>,
+			<&atim1_pwm 1 PWM_USEC(255) PWM_POLARITY_NORMAL>,
+			<&atim1_pwm 2 PWM_USEC(255) PWM_POLARITY_NORMAL>,
+			<&atim1_pwm 3 PWM_USEC(255) PWM_POLARITY_NORMAL>,
+			<&gptim2_pwm 0 PWM_USEC(255) PWM_POLARITY_NORMAL>,
+			<&gptim2_pwm 1 PWM_USEC(255) PWM_POLARITY_NORMAL>,
+			<&gptim2_pwm 2 PWM_USEC(255) PWM_POLARITY_NORMAL>,
+			<&gptim2_pwm 3 PWM_USEC(255) PWM_POLARITY_NORMAL>;
+		pwm-pin-gpios =
+			<&gpioa_00_31 0 GPIO_ACTIVE_HIGH>,
+			<&gpioa_00_31 1 GPIO_ACTIVE_HIGH>,
+			<&gpioa_00_31 2 GPIO_ACTIVE_HIGH>,
+			<&gpioa_00_31 3 GPIO_ACTIVE_HIGH>,
+			<&gpioa_00_31 4 GPIO_ACTIVE_HIGH>,
+			<&gpioa_00_31 5 GPIO_ACTIVE_HIGH>,
+			<&gpioa_00_31 6 GPIO_ACTIVE_HIGH>,
+			<&gpioa_00_31 7 GPIO_ACTIVE_HIGH>;
+	};
+};
+
+&pinctrl {
+	gpadc_default: gpadc_default {
+		group1 {
+			pinmux = <PA28_GPADC_CH0>, <PA29_GPADC_CH1>,
+				 <PA30_GPADC_CH2>, <PA31_GPADC_CH3>,
+				 <PA32_GPADC_CH4>, <PA33_GPADC_CH5>,
+				 <PA34_GPADC_CH6>;
+		};
+	};
+
+	atim1_pwm_default: atim1_pwm_default {
+		group1 {
+			pinmux = <PA00_ATIM1_CH1>, <PA01_ATIM1_CH2>,
+				 <PA02_ATIM1_CH3>, <PA03_ATIM1_CH4>;
+		};
+	};
+
+	gptim2_pwm_default: gptim2_pwm_default {
+		group1 {
+			pinmux = <PA04_GPTIM2_CH1>, <PA05_GPTIM2_CH2>,
+				 <PA06_GPTIM2_CH3>, <PA07_GPTIM2_CH4>;
+		};
+	};
+};
+
+&gpadc {
+	pinctrl-0 = <&gpadc_default>;
+	pinctrl-names = "default";
+	status = "okay";
+	nvmem-cells = <&sf32lb52_calib_bank1>;
+	nvmem-cell-names = "calibration";
+
+	#address-cells = <1>;
+	#size-cells = <0>;
+
+	/*
+	 * One channel subnode per io-channels entry. ADC_DT_SPEC_GET_BY_IDX
+	 * requires zephyr,gain / zephyr,reference / zephyr,acquisition-time /
+	 * zephyr,resolution; the sf32lb GPADC driver only accepts
+	 * ADC_GAIN_1, ADC_REF_INTERNAL, ADC_ACQ_TIME_DEFAULT, resolution=12.
+	 */
+	channel@0 {
+		reg = <0>;
+		zephyr,gain = "ADC_GAIN_1";
+		zephyr,reference = "ADC_REF_INTERNAL";
+		zephyr,acquisition-time = <ADC_ACQ_TIME_DEFAULT>;
+		zephyr,resolution = <12>;
+	};
+	channel@1 {
+		reg = <1>;
+		zephyr,gain = "ADC_GAIN_1";
+		zephyr,reference = "ADC_REF_INTERNAL";
+		zephyr,acquisition-time = <ADC_ACQ_TIME_DEFAULT>;
+		zephyr,resolution = <12>;
+	};
+	channel@2 {
+		reg = <2>;
+		zephyr,gain = "ADC_GAIN_1";
+		zephyr,reference = "ADC_REF_INTERNAL";
+		zephyr,acquisition-time = <ADC_ACQ_TIME_DEFAULT>;
+		zephyr,resolution = <12>;
+	};
+	channel@3 {
+		reg = <3>;
+		zephyr,gain = "ADC_GAIN_1";
+		zephyr,reference = "ADC_REF_INTERNAL";
+		zephyr,acquisition-time = <ADC_ACQ_TIME_DEFAULT>;
+		zephyr,resolution = <12>;
+	};
+	channel@4 {
+		reg = <4>;
+		zephyr,gain = "ADC_GAIN_1";
+		zephyr,reference = "ADC_REF_INTERNAL";
+		zephyr,acquisition-time = <ADC_ACQ_TIME_DEFAULT>;
+		zephyr,resolution = <12>;
+	};
+	channel@5 {
+		reg = <5>;
+		zephyr,gain = "ADC_GAIN_1";
+		zephyr,reference = "ADC_REF_INTERNAL";
+		zephyr,acquisition-time = <ADC_ACQ_TIME_DEFAULT>;
+		zephyr,resolution = <12>;
+	};
+	channel@6 {
+		reg = <6>;
+		zephyr,gain = "ADC_GAIN_1";
+		zephyr,reference = "ADC_REF_INTERNAL";
+		zephyr,acquisition-time = <ADC_ACQ_TIME_DEFAULT>;
+		zephyr,resolution = <12>;
+	};
+};
+
+&atim {
+	sifli,prescaler = <47>;
+	status = "okay";
+
+	atim1_pwm: pwm {
+		pinctrl-0 = <&atim1_pwm_default>;
+		pinctrl-names = "default";
+		status = "okay";
+	};
+};
+
+&gptim2 {
+	sifli,prescaler = <47>;
+	status = "okay";
+
+	gptim2_pwm: pwm {
+		pinctrl-0 = <&gptim2_pwm_default>;
+		pinctrl-names = "default";
+		status = "okay";
+	};
+};
