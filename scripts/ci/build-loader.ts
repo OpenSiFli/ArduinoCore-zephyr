@@ -96,7 +96,7 @@ function main() {
 
   console.log("Generating exported symbol scripts");
   const elf = join(buildDir, "zephyr", "zephyr.elf");
-  const dynamic = capture("python3", [join(root, "extra", "gen_provides.py"), elf, "-L"], { cwd: root });
+  const dynamic = capture("python3", [join(root, "extra", "gen_provides.py"), elf, "-L"], { cwd: root, env });
   writeText(join(variantDir, "syms-dynamic.ld"), `${dynamic}\n`);
   const staticSymbols = capture(
     "python3",
@@ -115,7 +115,7 @@ function main() {
       "calloc=__wrap_calloc",
       "random=__wrap_random",
     ],
-    { cwd: root },
+    { cwd: root, env },
   );
   writeText(join(variantDir, "syms-static.ld"), `${staticSymbols}\n`);
 
