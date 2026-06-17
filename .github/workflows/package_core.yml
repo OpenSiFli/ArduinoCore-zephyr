@@ -242,6 +242,7 @@ jobs:
             release-assets/*.dts
           delete_remote: true
           flush_url: https://downloads.sifli.com/github_assets/${{ github.repository }}/releases/download/
+          global: true
 
       - name: Upload release assets to COS latest prefix
         uses: OpenSiFli/SiFliMirrorSync@v1
@@ -263,3 +264,4 @@ jobs:
             release-assets/*.dts
           delete_remote: true
           flush_url: https://downloads.sifli.com/github_assets/${{ github.repository }}/releases/latest/download/
+          global: true
