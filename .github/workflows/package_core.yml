@@ -73,6 +73,10 @@ jobs:
           bun run scripts/ci/package-core.ts --version "$CORE_VERSION" --out "$CORE_FILE"
           echo "core_file=${CORE_FILE}" >> "$GITHUB_OUTPUT"
 
+      - name: Package sftool for local Arduino CLI install
+        run: |
+          bun run scripts/ci/package-sftool.ts --host x86_64-linux-gnu --out-dir distrib
+
       - name: Generate local package index
         run: |
           bun run scripts/ci/generate-index.ts \
@@ -157,7 +161,7 @@ jobs:
       - name: Install release packaging dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends zip tar
+          sudo apt-get install -y --no-install-recommends zip unzip tar xz-utils
 
       - name: Download core build artifacts
         uses: actions/download-artifact@v8
@@ -168,6 +172,7 @@ jobs:
       - name: Build local Arduino tools
         run: |
           bun run scripts/ci/package-tools.ts --out-dir release-assets
+          bun run scripts/ci/package-sftool.ts --out-dir release-assets
 
       - name: Generate release package indexes
         run: |

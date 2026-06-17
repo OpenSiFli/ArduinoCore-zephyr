@@ -185,3 +185,8 @@ export const SFTOOL: ToolDefinition = {
     },
   ],
 };
+
+export function sftoolPackageArchiveName(host: string): string {
+  const ext = host.endsWith("mingw32") ? ".zip" : ".tar.gz";
+  return `sftool-${SFTOOL.version}-${host}${ext}`;
+}

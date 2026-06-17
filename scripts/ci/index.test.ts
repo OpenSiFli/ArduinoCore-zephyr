@@ -2,9 +2,9 @@ import { describe, expect, test } from "bun:test";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { buildPackageIndex, mirrorPackageIndex, toChinaMirrorUrl } from "./generate-index";
+import { buildPackageIndex, buildSftoolFromArchives, mirrorPackageIndex, toChinaMirrorUrl } from "./generate-index";
 import { getBoard } from "./lib";
-import { SFTOOL, ZEPHYR_ARM_EABI } from "./tool-manifest";
+import { SFTOOL, ZEPHYR_ARM_EABI, sftoolPackageArchiveName } from "./tool-manifest";
 
 describe("package index generation", () => {
   test("mirrors GitHub asset URLs without touching non-GitHub URLs", () => {
@@ -68,6 +68,19 @@ describe("package index generation", () => {
         archiveFileName: "sftool-0.2.3-x86_64-pc-windows-msvc.zip",
       }),
     );
+  });
+
+  test("uses Arduino-compatible sftool wrapper archives when present", () => {
+    const dir = join(tmpdir(), `sifli-sftool-test-${process.pid}`);
+    mkdirSync(dir, { recursive: true });
+    const archiveFileName = sftoolPackageArchiveName("x86_64-linux-gnu");
+    writeFileSync(join(dir, archiveFileName), "fake-sftool-wrapper");
+    const tool = buildSftoolFromArchives(dir, "http://127.0.0.1:8765", false);
+    const linux = tool.systems.find((system) => system.host === "x86_64-linux-gnu");
+    expect(linux).toMatchObject({
+      archiveFileName,
+      url: `http://127.0.0.1:8765/${archiveFileName}`,
+    });
   });
 
   test("uses Zephyr SDK 1.0.1 GNU arm toolchain assets", () => {

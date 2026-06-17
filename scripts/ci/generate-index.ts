@@ -14,7 +14,14 @@ import {
   type ToolSystem,
   writeText,
 } from "./lib";
-import { ARDUINO_TOOL_FALLBACKS, GITHUB_MIRROR_PREFIX, GO_TOOL_TARGETS, SFTOOL, ZEPHYR_ARM_EABI } from "./tool-manifest";
+import {
+  ARDUINO_TOOL_FALLBACKS,
+  GITHUB_MIRROR_PREFIX,
+  GO_TOOL_TARGETS,
+  SFTOOL,
+  ZEPHYR_ARM_EABI,
+  sftoolPackageArchiveName,
+} from "./tool-manifest";
 
 type PackageIndex = {
   packages: Array<Record<string, unknown>>;
@@ -78,21 +85,48 @@ export function buildToolFromArchives(
   return { name, version, systems };
 }
 
+export function buildSftoolFromArchives(
+  toolsDir: string,
+  releaseBaseUrl: string,
+  requireLocal: boolean,
+): ToolDefinition {
+  const systems: ToolSystem[] = [];
+  for (const system of SFTOOL.systems) {
+    const archiveFileName = sftoolPackageArchiveName(system.host);
+    const file = join(toolsDir, archiveFileName);
+    if (!existsSync(file)) {
+      if (requireLocal) throw new Error(`Missing sftool archive ${file}`);
+      systems.push(system);
+      continue;
+    }
+    systems.push({
+      host: system.host,
+      url: `${releaseBaseUrl}/${archiveFileName}`,
+      archiveFileName,
+      checksum: `SHA-256:${sha256File(file)}`,
+      size: fileSize(file),
+    });
+  }
+  return { name: SFTOOL.name, version: SFTOOL.version, systems };
+}
+
 export function buildPackageIndex(options: GenerateOptions): PackageIndex {
   const root = repoRoot();
   const board = getBoard("sf32lb52devkitlcd", root);
   const coreFile = resolve(options.core);
   const releaseBaseUrl = options.assetBaseUrl || `https://github.com/${options.repo}/releases/download/${options.releaseTag}`;
   const coreUrl = options.assetBaseUrl ? `${options.assetBaseUrl.replace(/\/$/, "")}/${archiveName(coreFile)}` : `${releaseBaseUrl}/${archiveName(coreFile)}`;
+  const toolsDir = resolve(options.toolsDir);
   const arduinoTools = ["gen-rodata-ld", "zephyr-sketch-tool"].map((tool) =>
     buildToolFromArchives(
       tool,
       ARDUINO_TOOL_FALLBACKS[tool].version,
-      resolve(options.toolsDir),
+      toolsDir,
       releaseBaseUrl,
       options.requireLocalTools,
     ),
   );
+  const sftool = buildSftoolFromArchives(toolsDir, releaseBaseUrl, options.requireLocalTools);
 
   return {
     packages: [
@@ -121,7 +155,7 @@ export function buildPackageIndex(options: GenerateOptions): PackageIndex {
             ],
           },
         ],
-        tools: [SFTOOL],
+        tools: [sftool],
       },
       {
         name: "zephyr",

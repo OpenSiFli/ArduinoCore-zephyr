@@ -5,6 +5,7 @@
   "scripts": {
     "ci:build-loader": "bun run scripts/ci/build-loader.ts",
     "ci:package-core": "bun run scripts/ci/package-core.ts",
+    "ci:package-sftool": "bun run scripts/ci/package-sftool.ts",
     "ci:package-tools": "bun run scripts/ci/package-tools.ts",
     "ci:generate-index": "bun run scripts/ci/generate-index.ts",
     "test": "bun test scripts/ci"
