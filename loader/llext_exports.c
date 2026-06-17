@@ -188,13 +188,15 @@ FORCE_EXPORT_SYM(net_mgmt_NET_REQUEST_WIFI_AP_ENABLE);
 #endif
 
 #if defined(CONFIG_BT)
-FORCE_EXPORT_SYM(bt_enable_raw);
 FORCE_EXPORT_SYM(bt_send);
-FORCE_EXPORT_SYM(bt_buf_get_tx);
 FORCE_EXPORT_SYM(net_buf_simple_pull);
 FORCE_EXPORT_SYM(net_buf_simple_add_mem);
 FORCE_EXPORT_SYM(net_buf_simple_pull_mem);
 FORCE_EXPORT_SYM(net_buf_unref);
+#if defined(CONFIG_BT_HCI_RAW)
+FORCE_EXPORT_SYM(bt_enable_raw);
+FORCE_EXPORT_SYM(bt_buf_get_tx);
+#endif
 #if defined(CONFIG_BT_HCI_SETUP)
 FORCE_EXPORT_SYM(bt_h4_vnd_setup);
 #endif
