@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { buildPackageIndex, mirrorPackageIndex, toChinaMirrorUrl } from "./generate-index";
 import { getBoard } from "./lib";
-import { SFTOOL } from "./tool-manifest";
+import { SFTOOL, ZEPHYR_ARM_EABI } from "./tool-manifest";
 
 describe("package index generation", () => {
   test("mirrors GitHub asset URLs without touching non-GitHub URLs", () => {
@@ -17,7 +17,7 @@ describe("package index generation", () => {
   test("mirrors nested package index url fields", () => {
     const mirrored = mirrorPackageIndex({
       url: "https://github.com/OpenSiFli/ArduinoCore-zephyr/releases/download/v1/core.tar.bz2",
-      nested: [{ url: "https://github.com/zephyrproject-rtos/sdk-ng/releases/download/v0.16.8/tool.tar.xz" }],
+      nested: [{ url: "https://github.com/zephyrproject-rtos/sdk-ng/releases/download/v1.0.1/tool.tar.xz" }],
     });
     expect(mirrored.url).toContain("https://downloads.sifli.com/github_assets/OpenSiFli/");
     expect(mirrored.nested[0].url).toContain("https://downloads.sifli.com/github_assets/zephyrproject-rtos/");
@@ -43,7 +43,7 @@ describe("package index generation", () => {
     expect(sifli.platforms).toHaveLength(1);
     expect(sifli.platforms[0].architecture).toBe("sf32lb52");
     expect(sifli.platforms[0].toolsDependencies).toContainEqual({ packager: "sifli", name: "sftool", version: "0.2.3" });
-    expect(sifli.platforms[0].toolsDependencies).toContainEqual({ packager: "zephyr", name: "arm-zephyr-eabi", version: "0.16.8" });
+    expect(sifli.platforms[0].toolsDependencies).toContainEqual({ packager: "zephyr", name: "arm-zephyr-eabi", version: "1.0.1" });
   });
 
   test("parses the sf32lb52 board metadata", () => {
@@ -66,6 +66,22 @@ describe("package index generation", () => {
       expect.objectContaining({
         host: "x86_64-mingw32",
         archiveFileName: "sftool-0.2.3-x86_64-pc-windows-msvc.zip",
+      }),
+    );
+  });
+
+  test("uses Zephyr SDK 1.0.1 GNU arm toolchain assets", () => {
+    expect(ZEPHYR_ARM_EABI.version).toBe("1.0.1");
+    expect(ZEPHYR_ARM_EABI.systems).toContainEqual(
+      expect.objectContaining({
+        host: "x86_64-linux-gnu",
+        archiveFileName: "toolchain_gnu_linux-x86_64_arm-zephyr-eabi.tar.xz",
+      }),
+    );
+    expect(ZEPHYR_ARM_EABI.systems).toContainEqual(
+      expect.objectContaining({
+        host: "x86_64-mingw32",
+        archiveFileName: "toolchain_gnu_windows-x86_64_arm-zephyr-eabi.7z",
       }),
     );
   });

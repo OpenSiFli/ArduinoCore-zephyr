@@ -186,7 +186,7 @@ download all packages required for a Zephyr build in addition to the toolchains
 in the Zephyr SDK.
 
 > [!NOTE]
-> This core is validated with version v0.16.8 of the SDK. Compatibility with later versions has not been tested yet.
+> This core is validated with version v1.0.1 of the SDK. Compatibility with older versions has not been tested.
 
 ## 🛠️ Regenerate the compiled core files
 

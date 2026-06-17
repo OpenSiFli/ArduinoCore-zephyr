@@ -9,7 +9,7 @@ menu.link_mode=Link mode
 sf32lb52devkitlcd.name=SiFli SF32LB52 DevKit LCD
 sf32lb52devkitlcd.build.core=arduino
 sf32lb52devkitlcd.build.crossprefix=arm-zephyr-eabi-
-sf32lb52devkitlcd.build.compiler_path={runtime.tools.arm-zephyr-eabi-0.16.8.path}/bin/
+sf32lb52devkitlcd.build.compiler_path={runtime.tools.arm-zephyr-eabi-1.0.1.path}/arm-zephyr-eabi/bin/
 
 sf32lb52devkitlcd.menu.debug.false=Standard
 sf32lb52devkitlcd.menu.debug.true=Debug
