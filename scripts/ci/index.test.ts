@@ -88,6 +88,10 @@ describe("package index generation", () => {
 
   test("uses Zephyr SDK 1.0.1 GNU arm toolchain assets", () => {
     expect(ZEPHYR_ARM_EABI.version).toBe("1.0.1");
+    const platform = readText("platform.txt");
+    expect(platform).toContain("--specs=picolibc.specs");
+    expect(platform).not.toContain("--specs=nano.specs");
+    expect(platform).not.toContain("--specs=nosys.specs");
     expect(ZEPHYR_ARM_EABI.systems).toContainEqual(
       expect.objectContaining({
         host: "x86_64-linux-gnu",
