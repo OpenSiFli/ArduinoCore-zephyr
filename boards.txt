@@ -49,6 +49,8 @@ sf32lb52devkitlcd.upload.maximum_data_size=524288
 
 sf32lb52devkitlcd.bootloader.tool=sifli
 sf32lb52devkitlcd.bootloader.tool.default=sifli
+sf32lb52devkitlcd.bootloader.ftab.file=zephyr-{build.variant}.ftab.bin
+sf32lb52devkitlcd.bootloader.ftab.address=0x12000000
 sf32lb52devkitlcd.bootloader.file=zephyr-{build.variant}.bin
 sf32lb52devkitlcd.bootloader.address=0x12010000
 sf32lb52devkitlcd.bootloader.target=sf32lb52

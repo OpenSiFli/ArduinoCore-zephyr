@@ -258,7 +258,7 @@ Build variant: sf32lb52_devkit_lcd_sf32lb525uc6
 ...
 ```
 
-This can also be performed via the "Burn bootloader" action in the IDE if the core is properly installed, as detailed below. The packaged bootloader file is `zephyr-sf32lb52_devkit_lcd_sf32lb525uc6.bin`, and the upload tool is `sftool`.
+This can also be performed via the "Burn bootloader" action in the IDE if the core is properly installed, as detailed below. The packaged bootloader artifacts are `zephyr-sf32lb52_devkit_lcd_sf32lb525uc6.ftab.bin` and `zephyr-sf32lb52_devkit_lcd_sf32lb525uc6.bin`, and the upload tool is `sftool`.
 
 ### Using the Core in Arduino IDE/CLI
 

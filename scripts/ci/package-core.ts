@@ -83,13 +83,16 @@ function main() {
 
   const firmwarePrefix = `zephyr-${variant}.`;
   const bootloaderFile = `zephyr-${variant}.bin`;
+  const bootloaderFtabFile = `zephyr-${variant}.ftab.bin`;
   const firmwares = readdirSync(join(root, "firmwares")).filter((name) => name.startsWith(firmwarePrefix));
   if (firmwares.length === 0) throw new Error(`No firmware artifacts found for ${variant}`);
   if (!firmwares.includes(bootloaderFile)) throw new Error(`Missing bootloader firmware ${bootloaderFile}`);
+  if (!firmwares.includes(bootloaderFtabFile)) throw new Error(`Missing bootloader ftab ${bootloaderFtabFile}`);
   for (const name of firmwares) {
     copyPath(join(root, "firmwares", name), join(staged, "firmwares", name));
   }
   copyPath(join(root, "firmwares", bootloaderFile), join(staged, "bootloaders", bootloaderFile));
+  copyPath(join(root, "firmwares", bootloaderFtabFile), join(staged, "bootloaders", bootloaderFtabFile));
 
   ensureDir(join(root, "distrib"));
   ensureDir(dirname(out));
