@@ -28,7 +28,7 @@ done
 log_msg "group" "Bootstrapping Python environment for Zephyr"
 python3 -m venv venv
 source venv/bin/activate
-pip install west protobuf grpcio-tools pyelftools
+pip install west protobuf grpcio-tools
 log_msg "endgroup"
 
 log_msg "group" "Initializing Zephyr workspace and modules: $HAL_FILTER"
