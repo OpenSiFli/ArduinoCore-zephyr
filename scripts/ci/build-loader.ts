@@ -56,6 +56,7 @@ function main() {
   const buildDir = join(root, "build", board.variant);
   const variantDir = join(root, "variants", board.variant);
   const firmwareDir = join(root, "firmwares");
+  const bootloaderDir = join(root, "bootloaders");
   let westArgs = [...board.args, ...extraArgs];
 
   if (debug) {
@@ -78,6 +79,7 @@ function main() {
 
   ensureDir(variantDir);
   ensureDir(firmwareDir);
+  ensureDir(bootloaderDir);
   remove(join(buildDir, "llext-edk"));
   run("tar", ["xf", join("zephyr", "llext-edk.tar.Z")], { cwd: buildDir });
   run("rsync", ["-a", "--delete", `${join(buildDir, "llext-edk")}/`, `${join(variantDir, "llext-edk")}/`]);
@@ -129,6 +131,13 @@ function main() {
     if (!existsSync(artifact)) {
       throw new Error(`Expected firmware artifact was not generated: ${artifact}`);
     }
+  }
+
+  const bootloader = resolve(bootloaderDir, `zephyr-${board.variant}.bin`);
+  remove(bootloader);
+  run("cp", [resolve(firmwareDir, `zephyr-${board.variant}.bin`), bootloader]);
+  if (!existsSync(bootloader)) {
+    throw new Error(`Expected bootloader artifact was not generated: ${bootloader}`);
   }
 }
 

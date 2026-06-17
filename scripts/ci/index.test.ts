@@ -111,4 +111,20 @@ describe("package index generation", () => {
       }),
     );
   });
+
+  test("passes the complete serial port path to sftool uploads", () => {
+    const platform = readText("platform.txt");
+    expect(platform).toContain('tools.sifli.upload.pattern="{path}/{cmd}" --chip SF32LB52 --port "{serial.port}"');
+    expect(platform).not.toContain("tools.sifli.upload.pattern=\"{path}/{cmd}\" --chip SF32LB52 --port {serial.port.file}");
+  });
+
+  test("uses sftool to burn the packaged bootloader", () => {
+    const board = readText("boards.txt");
+    const platform = readText("platform.txt");
+
+    expect(board).toContain("sf32lb52devkitlcd.bootloader.address=0x12010000");
+    expect(platform).toContain(
+      'tools.sifli.bootloader.pattern="{path}/{cmd}" --chip SF32LB52 --port "{serial.port}" write_flash "{runtime.platform.path}/bootloaders/{bootloader.file}@{bootloader.address}"',
+    );
+  });
 });
