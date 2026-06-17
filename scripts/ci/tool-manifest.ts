@@ -29,10 +29,10 @@ export const ZEPHYR_ARM_EABI: ToolDefinition = {
     },
     {
       host: "x86_64-mingw32",
-      url: "https://github.com/zephyrproject-rtos/sdk-ng/releases/download/v1.0.1/toolchain_gnu_windows-x86_64_arm-zephyr-eabi.7z",
-      archiveFileName: "toolchain_gnu_windows-x86_64_arm-zephyr-eabi.7z",
-      checksum: "SHA-256:d08df2e83378dc8d28d0c67ab72d021ca633344b7a2bc053ababf9b8e677aa8d",
-      size: 79217349,
+      url: "https://downloads.sifli.com/github_assets/zephyrproject-rtos/sdk-ng/releases/download/v1.0.1/toolchain_gnu_windows-x86_64_arm-zephyr-eabi.zip",
+      archiveFileName: "toolchain_gnu_windows-x86_64_arm-zephyr-eabi.zip",
+      checksum: "SHA-256:e807dcbe5d32b12187fa3769700d17bfa5627d1b140577dd8930a415f6723ad3",
+      size: 219119514,
     },
   ],
 };

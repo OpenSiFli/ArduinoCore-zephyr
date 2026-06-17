@@ -104,7 +104,10 @@ describe("package index generation", () => {
     expect(ZEPHYR_ARM_EABI.systems).toContainEqual(
       expect.objectContaining({
         host: "x86_64-mingw32",
-        archiveFileName: "toolchain_gnu_windows-x86_64_arm-zephyr-eabi.7z",
+        url: "https://downloads.sifli.com/github_assets/zephyrproject-rtos/sdk-ng/releases/download/v1.0.1/toolchain_gnu_windows-x86_64_arm-zephyr-eabi.zip",
+        archiveFileName: "toolchain_gnu_windows-x86_64_arm-zephyr-eabi.zip",
+        checksum: "SHA-256:e807dcbe5d32b12187fa3769700d17bfa5627d1b140577dd8930a415f6723ad3",
+        size: 219119514,
       }),
     );
   });
