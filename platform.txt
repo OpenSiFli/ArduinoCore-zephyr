@@ -340,7 +340,7 @@ tools.sifli.upload.pattern="{path}/{cmd}" --chip SF32LB52 --port "{serial.port}"
 
 tools.sifli.bootloader.params.verbose=
 tools.sifli.bootloader.params.quiet=
-tools.sifli.bootloader.pattern="{path}/{cmd}" --chip SF32LB52 --port "{serial.port}" write_flash "{runtime.platform.path}/bootloaders/{bootloader.ftab.file}@{bootloader.ftab.address}" "{runtime.platform.path}/bootloaders/{bootloader.file}@{bootloader.address}"
+tools.sifli.bootloader.pattern="{path}/{cmd}" --chip SF32LB52 --port "{serial.port}" write_flash "{runtime.platform.path}/bootloaders/{bootloader.ftab.file}" "{runtime.platform.path}/bootloaders/{bootloader.file}@{bootloader.address}"
 
 tools.sifli.erase.params.verbose=
 tools.sifli.erase.params.quiet=

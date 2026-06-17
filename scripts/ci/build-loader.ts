@@ -95,20 +95,8 @@ function main() {
   }
   const ftabHexSource = join(buildDir, "zephyr", "sf32lb52x_ftab.hex");
   const ftabHex = join(firmwareDir, `zephyr-${board.variant}.ftab.hex`);
-  const ftabBin = join(firmwareDir, `zephyr-${board.variant}.ftab.bin`);
   remove(ftabHex);
-  remove(ftabBin);
   run("cp", [ftabHexSource, ftabHex]);
-  run(
-    "python3",
-    [
-      "-c",
-      "from intelhex import IntelHex\nimport sys\nIntelHex(sys.argv[1]).tobinfile(sys.argv[2])",
-      ftabHex,
-      ftabBin,
-    ],
-    { cwd: root, env },
-  );
   run("cp", [join(buildDir, "zephyr", "zephyr.dts"), join(firmwareDir, `zephyr-${board.variant}.dts`)]);
   run("cp", [join(buildDir, "zephyr", ".config"), join(firmwareDir, `zephyr-${board.variant}.config`)]);
 
@@ -142,7 +130,7 @@ function main() {
     env,
   });
 
-  for (const ext of ["bin", "elf", "hex", "config", "dts", "ftab.bin", "ftab.hex"]) {
+  for (const ext of ["bin", "elf", "hex", "config", "dts", "ftab.hex"]) {
     const artifact = resolve(firmwareDir, `zephyr-${board.variant}.${ext}`);
     if (!existsSync(artifact)) {
       throw new Error(`Expected firmware artifact was not generated: ${artifact}`);
@@ -156,9 +144,9 @@ function main() {
     throw new Error(`Expected bootloader artifact was not generated: ${bootloader}`);
   }
 
-  const ftab = resolve(bootloaderDir, `zephyr-${board.variant}.ftab.bin`);
+  const ftab = resolve(bootloaderDir, `zephyr-${board.variant}.ftab.hex`);
   remove(ftab);
-  run("cp", [resolve(firmwareDir, `zephyr-${board.variant}.ftab.bin`), ftab]);
+  run("cp", [resolve(firmwareDir, `zephyr-${board.variant}.ftab.hex`), ftab]);
   if (!existsSync(ftab)) {
     throw new Error(`Expected bootloader ftab artifact was not generated: ${ftab}`);
   }

@@ -323,7 +323,7 @@ west flash -d build/sf32lb52_devkit_lcd_sf32lb525uc6
 ```
 
 如果 core 已正确安装，也可以通过 IDE 的 "Burn bootloader" 动作执行。发布包中的
-bootloader 产物是 `zephyr-sf32lb52_devkit_lcd_sf32lb525uc6.ftab.bin` 和
+bootloader 产物是 `zephyr-sf32lb52_devkit_lcd_sf32lb525uc6.ftab.hex` 和
 `zephyr-sf32lb52_devkit_lcd_sf32lb525uc6.bin`，上传工具是 `sftool`。
 
 ### 在 Arduino IDE/CLI 中使用本地 Core

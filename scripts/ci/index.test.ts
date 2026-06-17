@@ -122,11 +122,11 @@ describe("package index generation", () => {
     const board = readText("boards.txt");
     const platform = readText("platform.txt");
 
-    expect(board).toContain("sf32lb52devkitlcd.bootloader.ftab.file=zephyr-{build.variant}.ftab.bin");
-    expect(board).toContain("sf32lb52devkitlcd.bootloader.ftab.address=0x12000000");
+    expect(board).toContain("sf32lb52devkitlcd.bootloader.ftab.file=zephyr-{build.variant}.ftab.hex");
+    expect(board).not.toContain("sf32lb52devkitlcd.bootloader.ftab.address=");
     expect(board).toContain("sf32lb52devkitlcd.bootloader.address=0x12010000");
     expect(platform).toContain(
-      'tools.sifli.bootloader.pattern="{path}/{cmd}" --chip SF32LB52 --port "{serial.port}" write_flash "{runtime.platform.path}/bootloaders/{bootloader.ftab.file}@{bootloader.ftab.address}" "{runtime.platform.path}/bootloaders/{bootloader.file}@{bootloader.address}"',
+      'tools.sifli.bootloader.pattern="{path}/{cmd}" --chip SF32LB52 --port "{serial.port}" write_flash "{runtime.platform.path}/bootloaders/{bootloader.ftab.file}" "{runtime.platform.path}/bootloaders/{bootloader.file}@{bootloader.address}"',
     );
   });
 });
