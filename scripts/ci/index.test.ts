@@ -106,8 +106,8 @@ describe("package index generation", () => {
         host: "x86_64-mingw32",
         url: "https://downloads.sifli.com/github_assets/zephyrproject-rtos/sdk-ng/releases/download/v1.0.1/toolchain_gnu_windows-x86_64_arm-zephyr-eabi.zip",
         archiveFileName: "toolchain_gnu_windows-x86_64_arm-zephyr-eabi.zip",
-        checksum: "SHA-256:e807dcbe5d32b12187fa3769700d17bfa5627d1b140577dd8930a415f6723ad3",
-        size: 219119514,
+        checksum: "SHA-256:73d876b4df5a708fede0b773917ccb45bf3c33f089ba587f6b352dd356566cb6",
+        size: 218142036,
       }),
     );
   });
