@@ -1,6 +1,7 @@
 /build/
 /distrib/
 /firmwares/*
+/node_modules/
 /venv/
 llext-edk/
 cflags.txt

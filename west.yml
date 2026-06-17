@@ -13,6 +13,8 @@ manifest:
       url-base: https://github.com/zephyrproject-rtos
     - name: arduino
       url-base: https://github.com/arduino
+    - name: OpenSiFli
+      url-base: https://github.com/OpenSiFli
     - name: facchinm
       url-base: https://github.com/facchinm
     - name: pillo79
@@ -20,8 +22,9 @@ manifest:
 
   projects:
     - name: zephyr
-      remote: arduino
-      revision: zephyr-arduino-v4.2.0
+      remote: OpenSiFli
+      repo-path: zephyr-downstream
+      revision: 7c31bd523fd9effd599e573da1258e5a01d86755
       import:
         name-allowlist:
           - cmsis
@@ -35,6 +38,7 @@ manifest:
           - nanopb
           - lvgl
           - fatfs
+          - hal_sifli
         path-allowlist:
           - modules/hal/*
 

@@ -1,0 +1,72 @@
+import { describe, expect, test } from "bun:test";
+import { mkdirSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
+import { buildPackageIndex, mirrorPackageIndex, toChinaMirrorUrl } from "./generate-index";
+import { getBoard } from "./lib";
+import { SFTOOL } from "./tool-manifest";
+
+describe("package index generation", () => {
+  test("mirrors GitHub asset URLs without touching non-GitHub URLs", () => {
+    expect(toChinaMirrorUrl("https://github.com/OpenSiFli/sftool/releases/download/0.2.3/a.zip")).toBe(
+      "https://downloads.sifli.com/github_assets/OpenSiFli/sftool/releases/download/0.2.3/a.zip",
+    );
+    expect(toChinaMirrorUrl("https://downloads.arduino.cc/tools/a.zip")).toBe("https://downloads.arduino.cc/tools/a.zip");
+  });
+
+  test("mirrors nested package index url fields", () => {
+    const mirrored = mirrorPackageIndex({
+      url: "https://github.com/OpenSiFli/ArduinoCore-zephyr/releases/download/v1/core.tar.bz2",
+      nested: [{ url: "https://github.com/zephyrproject-rtos/sdk-ng/releases/download/v0.16.8/tool.tar.xz" }],
+    });
+    expect(mirrored.url).toContain("https://downloads.sifli.com/github_assets/OpenSiFli/");
+    expect(mirrored.nested[0].url).toContain("https://downloads.sifli.com/github_assets/zephyrproject-rtos/");
+  });
+
+  test("builds a single-board sifli index", () => {
+    const dir = join(tmpdir(), `sifli-index-test-${process.pid}`);
+    mkdirSync(dir, { recursive: true });
+    const core = join(dir, "ArduinoCore-sf32lb52-test.tar.bz2");
+    writeFileSync(core, "fake-core");
+    const index = buildPackageIndex({
+      core,
+      version: "1.2.3",
+      releaseTag: "1.2.3",
+      repo: "OpenSiFli/ArduinoCore-zephyr",
+      toolsDir: dir,
+      githubOut: join(dir, "github.json"),
+      cnOut: join(dir, "cn.json"),
+      requireLocalTools: false,
+    });
+
+    const sifli = index.packages.find((pkg) => pkg.name === "sifli") as any;
+    expect(sifli.platforms).toHaveLength(1);
+    expect(sifli.platforms[0].architecture).toBe("sf32lb52");
+    expect(sifli.platforms[0].toolsDependencies).toContainEqual({ packager: "sifli", name: "sftool", version: "0.2.3" });
+    expect(sifli.platforms[0].toolsDependencies).toContainEqual({ packager: "zephyr", name: "arm-zephyr-eabi", version: "0.16.8" });
+  });
+
+  test("parses the sf32lb52 board metadata", () => {
+    const board = getBoard("sf32lb52devkitlcd");
+    expect(board.target).toBe("sf32lb52_devkit_lcd");
+    expect(board.artifact).toBe("sf32lb52");
+    expect(board.subarch).toBe("sf32lb52");
+  });
+
+  test("maps sftool 0.2.3 release assets to sifli tool systems", () => {
+    expect(SFTOOL.version).toBe("0.2.3");
+    expect(SFTOOL.systems).toHaveLength(7);
+    expect(SFTOOL.systems).toContainEqual(
+      expect.objectContaining({
+        host: "x86_64-linux-gnu",
+        url: "https://github.com/OpenSiFli/sftool/releases/download/0.2.3/sftool-0.2.3-x86_64-unknown-linux-gnu.tar.xz",
+      }),
+    );
+    expect(SFTOOL.systems).toContainEqual(
+      expect.objectContaining({
+        host: "x86_64-mingw32",
+        archiveFileName: "sftool-0.2.3-x86_64-pc-windows-msvc.zip",
+      }),
+    );
+  });
+});

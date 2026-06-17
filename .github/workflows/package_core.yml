@@ -1,9 +1,7 @@
 # Copyright (c) Arduino s.r.l. and/or its affiliated companies
 # SPDX-License-Identifier: Apache-2.0
 
-# CI workflow to build, package, test and upload the ArduinoCore-zephyr core.
-
-name: Package, test and upload core
+name: Build, test and release SF32LB52 core
 
 on:
   push:
@@ -14,574 +12,235 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  # use the head SHA for PR hashes, instead of the merge commit
-  HEAD_REF: ${{ github.event.pull_request.head.sha || github.ref }}
+  HEAD_REF: ${{ github.event.pull_request.head.sha || github.sha }}
+  BOARD: sf32lb52devkitlcd
+  ZEPHYR_BOARD: sf32lb52_devkit_lcd
 
 jobs:
-
-
-
-  # Prepare the Zephyr build environment once for all boards, to speed up the
-  # overall process and ensure all builds use the same environment and metadata.
-  # Several outputs are made available for later jobs to use.
-
-  build-env:
-    name: Prepare build environment
+  build-test:
+    name: Build and test
     runs-on: ubuntu-latest
     outputs:
-      # User-friendly SemVer-compatible version for the build. Matches the tag
-      # name if building a tagged commit, otherwise it is "slightly more" than
-      # the latest tag.
-      CORE_VER: ${{ env.CORE_VER }}
-      # Tag (if found) or hash identifying this core build, should be used for
-      # user-friendly strings and file names
-      CORE_TAG: ${{ env.CORE_TAG }}
-      # Hash identifying this core build, should be used for exact version match
-      CORE_HASH: ${{ env.CORE_HASH }}
-      # JSON describing all boards to build, collected by get_board_details.sh
-      ALL_BOARD_DATA: ${{ env.ALL_BOARD_DATA }}
-      # Extended version of ALL_BOARD_DATA with link_mode alternatives added
-      ALL_BOARD_FQBNS: ${{ env.ALL_BOARD_FQBNS }}
-      # List of artifacts to produce, including the "zephyr" umbrella artifact
-      ARTIFACTS: ${{ env.ARTIFACTS }}
-      # List of architectures the artifacts will be built for
-      SUB_ARCHES: ${{ env.SUB_ARCHES }}
+      core_version: ${{ steps.version.outputs.core_version }}
+      core_file: ${{ steps.package.outputs.core_file }}
     steps:
+      - uses: actions/checkout@v6
+        with:
+          submodules: recursive
+          fetch-depth: 0
+          persist-credentials: false
+          fetch-tags: true
+
+      - uses: oven-sh/setup-bun@v2
+
+      - name: Install Bun dependencies
+        run: bun install --frozen-lockfile
 
       - name: Install OS dependencies
-        working-directory: /opt
         run: |
-          sudo apt-get remove --purge man-db -y # skips the mandb triggers
+          sudo apt-get remove --purge man-db -y
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends git cmake wget python3-pip ninja-build
+          sudo apt-get install -y --no-install-recommends \
+            git cmake wget python3-pip python3-venv ninja-build \
+            ccache rsync zstd jq xz-utils zip unzip tar bzip2
 
-      - uses: actions/checkout@v6
-        with:
-          submodules: 'recursive'
-          fetch-depth: 0
-          persist-credentials: false
-          fetch-tags: true # needed for get_core_version.sh
-
-      - name: Initialize Zephyr environment
+      - name: Test TypeScript tooling
         run: |
-          # Install Zephyr as a core user would, but faster
+          bunx --bun tsc --noEmit
+          bun test
+
+      - name: Initialize downstream Zephyr environment
+        run: |
           yes | ./extra/bootstrap.sh -o=--filter=tree:0
-          # Set up basic environment for later steps
-          echo "CORE_HASH=$(git describe --always $HEAD_REF)" >> "$GITHUB_ENV"
-          echo "ALL_BOARD_DATA=$(extra/get_board_details.sh | jq -c 'sort_by(.variant)')" >> "$GITHUB_ENV"
-          echo "CORE_VER=$(extra/get_core_version.sh)" >> "$GITHUB_ENV"
 
-      - name: Map output packages
-        # needs the above env vars
+      - name: Resolve core version
+        id: version
         run: |
-          echo "## Building \`$CORE_VER\`" >> "$GITHUB_STEP_SUMMARY"
-          echo "CORE_TAG=$(git describe --tags --exact-match --exclude '*/*' 2>/dev/null || echo $CORE_HASH)" >> "$GITHUB_ENV"
-          echo "ALL_BOARD_FQBNS=$(jq -c 'map((. + {link_mode: "static"}), (. + {link_mode: "dynamic"}))' <<< ${ALL_BOARD_DATA})" >> "$GITHUB_ENV"
-          echo "ARTIFACTS=$(jq -c '["zephyr"] + (map(.artifact) | unique)' <<< ${ALL_BOARD_DATA})" >> "$GITHUB_ENV"
-          echo "SUB_ARCHES=$(jq -c 'map(.subarch) | unique' <<< ${ALL_BOARD_DATA})" >> "$GITHUB_ENV"
-          # Archive the build environment for later jobs
-          (cd && tar cphf - .cmake work zephyr-sdk-* | zstd > build-env.tar.zstd)
-          # The API is only needed for packaging, not for building, so it's separate
-          tar cphf - cores/arduino/api | zstd > arduino-api.tar.zstd
-
-      - name: Archive build environment
-        uses: actions/upload-artifact@v7
-        with:
-          name: build-env
-          path: ~/build-env.tar.zstd
-          retention-days: 1
-          archive: false
-
-      - name: Archive API snapshot
-        uses: actions/upload-artifact@v7
-        with:
-          name: arduino-api
-          path: arduino-api.tar.zstd
-          retention-days: 1
-          archive: false
-
-
-
-  # Extract the build environment and compile the loader project for each board
-  # in parallel. The build logs and artifacts are intermediate results archived
-  # for later jobs.
-
-  build-board:
-    # NOTE: this name is hardcoded in ci_inspect_logs.py
-    name: Build for ${{ matrix.board }}
-    runs-on: ubuntu-latest
-    needs:
-      - build-env
-    env:
-      # ccache, don't look for the spec file anywhere
-      CCACHE_IGNOREOPTIONS: -specs=*
-      # build-specific name of the generated artifacts
-      ARTIFACT_TAG: ${{ needs.build-env.outputs.CORE_HASH }}-${{ matrix.board }}
-      # report file stem for this board
-      REPORT: reports/zephyr-${{ matrix.variant }}
-    strategy:
-      matrix:
-        include:
-          ${{ fromJSON( needs.build-env.outputs.ALL_BOARD_DATA ) }}
-      fail-fast: false
-    steps:
-
-      - uses: actions/download-artifact@v8
-        with:
-          path: /home/runner
-          name: build-env.tar.zstd
-
-      - name: Restore build environment
-        run: |
-          sudo apt-get remove --purge man-db -y # skips the mandb triggers
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends git cmake wget python3-pip ninja-build ccache
-          (cd ~ && tar --use-compress-program=unzstd -xpf build-env.tar.zstd && rm build-env.tar.zstd)
-
-      - name: ccache
-        uses: hendrikmuhs/ccache-action@v1.2.21
-        with:
-          verbose: 1
-          key: ${{ github.job }}-${{ matrix.board }} # independent caches
+          CORE_VERSION="$(./extra/get_core_version.sh)"
+          echo "core_version=${CORE_VERSION}" >> "$GITHUB_OUTPUT"
+          echo "CORE_VERSION=${CORE_VERSION}" >> "$GITHUB_ENV"
+          echo "## Building \`${CORE_VERSION}\`" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Build loader
-        shell: bash
         run: |
-          # create the report directory
-          mkdir -p reports
-          # run the build, capturing stdout and stderr
-          if ! ./extra/build.sh ${{ matrix.board }} 1> >(tee $REPORT.stdout) 2> >(tee $REPORT.stderr) ; then
-            # build failed, capture errors in summary and stop job without artifacts
-            echo "### :x: ${{ matrix.board }} (\`${{ matrix.variant }}\`) build errors" > $GITHUB_STEP_SUMMARY
-            echo >> $GITHUB_STEP_SUMMARY
-            echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
-            cat $REPORT.stderr >> $GITHUB_STEP_SUMMARY
-            echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
-            exit 1
-          fi
-
-          # look for warnings (errors are a happy path!)
-          grep -i "warning:" $REPORT.stdout > $REPORT.warnings || true
-
-          # extract the memory usage table (from the header to the first non-% line)
-          # override the size of the Flash with the size of the loader partition
-          # and add the size of the sketch partition (not reported by Zephyr)
-          LOADER_SIZE=$(( $(cat variants/${{ matrix.variant }}/syms-static.ld | grep '_loader_max_size' | cut -d '=' -f 2 | tr -d ') ;') ))
-          SKETCH_SIZE=$(( $(cat variants/${{ matrix.variant }}/syms-static.ld | grep '_sketch_max_size' | cut -d '=' -f 2 | tr -d ') ;') ))
-          cat $REPORT.stdout | sed -n '/^Memory region/,/^[^%]*$/p' | head -n -1 \
-                             | awk 'BEGIN {split("B KB MB GB", u); for(i in u) m[u[i]]=1024^(i-1)} /:/ {print "[\"" $1 "\"," $2*m[$3] "," $4*m[$5] "]"}' \
-                             | sort \
-                             | jq -s "map((select(.[0] == \"FLASH:\") | .[2]) |= ${LOADER_SIZE}) + [ [ \"SKETCH:\", 0, ${SKETCH_SIZE} ] ]" > $REPORT.meminfo
-          jq
-
-      - name: Package board artifacts
-        if: ${{ !cancelled() }}
-        run: |
-          # add the config file to the report files, list them for later archiving
-          cp firmwares/zephyr-${{ matrix.variant }}.config $REPORT.config
-          echo "REPORT_FILES<<EOF" >> $GITHUB_ENV
-          ls reports/* >> $GITHUB_ENV
-          echo "EOF" >> $GITHUB_ENV
-
-          # Preprare an archive of the built binaries (and build dir on failure)
-          [ "${{ job.status }}" == "failure" ] && FULL_BUILD_DIR="build/${{ matrix.variant }}/"
-          tar chf - \
-            firmwares/*${{ matrix.variant }}* \
-            variants/${{ matrix.variant }}/ \
-            ${FULL_BUILD_DIR} \
-          | zstd > binaries-${ARTIFACT_TAG}.tar.zstd
-
-      - name: Archive board binaries
-        if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@v7
-        with:
-          # prefix the name with 'failed-' if the build failed, so that it is not removed
-          name: ${{ format('{0}binaries-{1}', (job.status == 'failure') && 'failed-' || '', env.ARTIFACT_TAG) }}
-          path: binaries-${{ env.ARTIFACT_TAG }}.tar.zstd
-          retention-days: 7 # for failed build inspection
-          archive: false
-
-      - name: Archive build reports
-        if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@v7
-        with:
-          name: build-report-${{ env.ARTIFACT_TAG }}
-          path: ${{ env.REPORT_FILES }}
-          retention-days: 1
-
-
-
-  # Compose the core packages for each architecture in parallel, by retrieving
-  # the API snapshot and the built binaries for all boards and packaging them.
-  # The resulting core packages are final artifacts, ready for publishing.
-  # The 'zephyr' umbrella package is also created here by including all others.
-
-  package-core:
-    name: Package ${{ matrix.artifact }}
-    runs-on: ubuntu-latest
-    needs:
-      - build-env
-      - build-board
-    env:
-      ALL_BOARD_DATA: ${{ needs.build-env.outputs.ALL_BOARD_DATA }}
-      CORE_ARTIFACT: ArduinoCore-${{ matrix.artifact }}-${{ needs.build-env.outputs.CORE_HASH }}.tar.bz2
-      CORE_TAG: ${{ needs.build-env.outputs.CORE_TAG }}
-    strategy:
-      matrix:
-        artifact: ${{ fromJSON( needs.build-env.outputs.ARTIFACTS ) }}
-      fail-fast: false
-    if: ${{ !cancelled() && needs.build-env.result == 'success' }}
-    steps:
-
-      - uses: actions/checkout@v6
-        with:
-          submodules: 'recursive'
-          fetch-depth: 0
-          persist-credentials: false
-          fetch-tags: true
-
-      # Get the API snapshot
-      - uses: actions/download-artifact@v8
-        with:
-          path: .
-          name: arduino-api.tar.zstd
-
-      # Get all built binaries
-      - uses: actions/download-artifact@v8
-        with:
-          path: .
-          pattern: binaries-*
-          merge-multiple: true
+          bun run scripts/ci/build-loader.ts "$BOARD"
 
       - name: Package core
+        id: package
         run: |
-          # Extract the API snapshot and board binaries in place
-          rm -f cores/arduino/api # remove broken symlink
-          tar --use-compress-program=unzstd -xpf arduino-api.tar.zstd
-          for f in binaries-*.tar.zstd ; do
-            tar --use-compress-program=unzstd -xpf $f
-          done
-          # Create the core artifact for this set of boards
-          ./extra/package_core.sh ${{ matrix.artifact }} ${CORE_TAG} distrib/${CORE_ARTIFACT}
+          mkdir -p distrib
+          CORE_FILE="distrib/ArduinoCore-sf32lb52-${CORE_VERSION}.tar.bz2"
+          bun run scripts/ci/package-core.ts --version "$CORE_VERSION" --out "$CORE_FILE"
+          echo "core_file=${CORE_FILE}" >> "$GITHUB_OUTPUT"
 
-      - uses: actions/upload-artifact@v7
-        if: ${{ success() || failure() }}
-        with:
-          name: ${{ env.CORE_ARTIFACT }}
-          path: distrib/${{ env.CORE_ARTIFACT }}
-          archive: false
-
-
-
-  # After generating the final cores, the API and per-board binary archives are no longer needed.
-  # The build environment archive can also be removed.
-
-  cleanup-build:
-    name: Clean up intermediates
-    runs-on: ubuntu-latest
-    needs:
-      - package-core
-    steps:
-
-      - uses: geekyeggo/delete-artifact@v6
-        with:
-          name: |
-            arduino-api.tar.zstd
-            binaries-*
-            build-env.tar.zstd
-          failOnError: false
-
-
-
-  # For each board and link mode, compile all test sketches using the just
-  # built core. The compilation reports are archived for later inspection.
-  # This step never fails, so that expected errors do not block the CI run.
-
-  test-core:
-    # NOTE: this name is hardcoded in ci_inspect_logs.py
-    name: Test ${{ matrix.board }}:${{ matrix.link_mode }}
-    runs-on: ubuntu-latest
-    needs:
-      - build-env
-      - package-core
-    strategy:
-      matrix:
-        include:
-          ${{ fromJSON( needs.build-env.outputs.ALL_BOARD_FQBNS ) }}
-      fail-fast: false
-    env:
-      PLAT: arduino:${{ matrix.subarch }}
-      FQBN: arduino:${{ matrix.subarch }}:${{ matrix.board }}:link_mode=${{ matrix.link_mode }}
-      CORE_ARTIFACT: ArduinoCore-${{ matrix.artifact }}-${{ needs.build-env.outputs.CORE_HASH }}.tar.bz2
-      ARTIFACT_TAG: ${{ needs.build-env.outputs.CORE_HASH }}-${{ matrix.board }}-${{ matrix.link_mode }}
-    if: ${{ !cancelled() && needs.build-env.result == 'success' }}
-    steps:
-
-      # only needs the test list generator and artifact information
-      - uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
-          persist-credentials: false
-          sparse-checkout: |
-            extra/ci_test_list.sh
-            extra/artifacts/
-
-      - uses: actions/download-artifact@v8
-        with:
-          name: ${{ env.CORE_ARTIFACT }}
-
-      - name: Set up core
+      - name: Generate local package index
         run: |
-          tar xf ${CORE_ARTIFACT} # will create ArduinoCore-zephyr/
-          echo "REPORT_FILE=$(echo ${FQBN} | tr ':' '-').json" >> $GITHUB_ENV
+          bun run scripts/ci/generate-index.ts \
+            --core "${{ steps.package.outputs.core_file }}" \
+            --version "$CORE_VERSION" \
+            --release-tag "$CORE_VERSION" \
+            --asset-base-url "file://${PWD}/distrib" \
+            --github-out distrib/package_sifli_index.json \
+            --cn-out distrib/package_sifli_index_cn.json
 
-      - name: Get test sketches
+      - uses: arduino/setup-arduino-cli@v2
+
+      - name: Compile Blink with Arduino CLI
         run: |
-          # sets ALL_TESTS and ALL_LIBRARIES env vars in GITHUB_ENV
-          extra/ci_test_list.sh ${{ matrix.artifact }} ${{ matrix.variant }}
+          INDEX_URL="file://${PWD}/distrib/package_sifli_index.json"
+          arduino-cli config init --overwrite
+          arduino-cli core update-index --additional-urls "$INDEX_URL"
+          arduino-cli core install sifli:sf32lb52 --additional-urls "$INDEX_URL"
+          mkdir -p /tmp/Blink
+          cat > /tmp/Blink/Blink.ino <<'EOF'
+          void setup() {
+            pinMode(LED_BUILTIN, OUTPUT);
+          }
 
-      - name: Compile tests for ${{ matrix.board }}
-        uses: pillo79/compile-sketches@next
-        with:
-          fqbn: ${{ env.FQBN }}
-          platforms: |
-            # Use Board Manager version first to install the tools
-            - name: ${{ env.PLAT }}
-            # ... then replace that with the local version
-            - name: ${{ env.PLAT }}
-              source-path: "ArduinoCore-zephyr"
-          sketch-paths: |
-            ${{ env.ALL_TESTS }}
-          libraries: |
-            ${{ env.ALL_LIBRARIES }}
-          cli-compile-flags: |
-            - '--build-property'
-            - 'compiler.c.extra_flags=-Wno-type-limits -Wno-missing-field-initializers'
-            - '--build-property'
-            - 'compiler.cpp.extra_flags=-Wno-type-limits -Wno-missing-field-initializers'
-          verbose: 'false'
-          enable-deltas-report: 'false'
-          enable-issues-report: 'true'
-          always-succeed: 'true'
+          void loop() {
+            digitalWrite(LED_BUILTIN, HIGH);
+            delay(1000);
+            digitalWrite(LED_BUILTIN, LOW);
+            delay(1000);
+          }
+          EOF
+          arduino-cli compile --fqbn sifli:sf32lb52:${BOARD}:link_mode=dynamic /tmp/Blink
+          arduino-cli compile --fqbn sifli:sf32lb52:${BOARD}:link_mode=static /tmp/Blink
 
-      - name: Prepare log
-        if: ${{ success() || failure() }}
-        run: |
-          # make sure to create an empty report if none was created
-          [ ! -f sketches-reports/${REPORT_FILE} ] && mkdir -p sketches-reports && echo "{}" > sketches-reports/${REPORT_FILE}
-          # remove base path of the core install from all file references to make logs cleaner
-          sed -i -e 's!/home/runner/.arduino15/packages/arduino/hardware/zephyr/[^/]*/!!g' sketches-reports/${REPORT_FILE}
-
-      # archive the compile report for later
-      - uses: actions/upload-artifact@v7
-        if: ${{ success() || failure() }}
-        with:
-          name: test-report-${{ env.ARTIFACT_TAG }}
-          path: sketches-reports/*
-          retention-days: 1
-
-
-
-  # Collect all build and test reports, analyze them and produce a summary.
-  # See ci_inspect_logs.py for details.
-
-  verify-core:
-    runs-on: ubuntu-latest
-    needs:
-      - build-env
-      - package-core
-      - test-core
-    if: ${{ !cancelled() }}
-    env:
-      ALL_BOARD_DATA: ${{ needs.build-env.outputs.ALL_BOARD_DATA }}
-      CORE_VER: ${{ needs.build-env.outputs.CORE_VER }}
-      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      GH_REPO: ${{ github.repository }}
-    steps:
-
-      - uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
-          persist-credentials: false
-          fetch-tags: true
-
-      - uses: actions/download-artifact@v8
-        with:
-          path: .
-          pattern: "*-report-*"
-          merge-multiple: true
-
-      - name: Generate workflow summary
-        run: |
-          # gather the array of job metadata (especially name and ID) for the current workflow run
-          export WORKFLOW_JOBS=$(gh run view ${{ github.run_id }} --attempt ${{ github.run_attempt }} --json jobs --jq '.jobs')
-          # Run the log inspection script
-          extra/ci_inspect_logs.py result summary full_log
-          cat result
-
-          # Display the summary and full log in the step summary
-          cat summary >> $GITHUB_STEP_SUMMARY
-          cat full_log >> $GITHUB_STEP_SUMMARY
-
-          # Create a comment for PRs using the summary file
-          if [ "${{ github.event_name }}" == "pull_request" ]; then
-            mkdir -p comment-request
-            echo "${{ github.event.pull_request.number }}" > comment-request/pr_number
-            echo -e "## Built \`$CORE_VER\`\n" > comment-request/comment_body
-            # strip LaTeX color commands and escape sequences for mail readability
-            cat summary | sed -e 's!\${\\color{\S*}\(.*\)}\$!\1!g' -e 's!\\%!%!g' >> comment-request/comment_body
-          fi
-
-          # Prepare latest size artifact file on push events
-          if [ "${{ github.event_name }}" == "push" ]; then
-            tar jchf size-reports-${{ needs.build-env.outputs.CORE_HASH }}.tar.bz2 arduino-*.json
-          fi
-
-      - name: Compute code size changes
-        if: ${{ github.event_name == 'pull_request' }}
-        run: |
-          export GITHUB_BASE_SHA=$(git describe --always origin/${GITHUB_BASE_REF})
-          # errors due to race conditions with parallel branch runs should not fail the job
-          extra/ci_calc_size_reports.py ${GITHUB_BASE_SHA} sketches-reports/ || true
-
-      # upload comment request artifact (will be retrieved by leave_pr_comment.yml)
-      - name: Archive comment information
+      - name: Archive build artifacts
         uses: actions/upload-artifact@v7
-        if: ${{ github.event_name == 'pull_request' }}
         with:
-          name: comment-request
-          path: comment-request/
-          retention-days: 1
+          name: sf32lb52-build-${{ steps.version.outputs.core_version }}
+          path: |
+            distrib/
+            firmwares/zephyr-sf32lb52_devkit_lcd_sf32lb525uc6.*
+            variants/sf32lb52_devkit_lcd_sf32lb525uc6/
+          retention-days: 7
 
-      # upload size delta report artifact (will be retrieved by report_size_deltas.yml)
-      - name: Archive size deltas report information
-        uses: actions/upload-artifact@v7
-        if: ${{ github.event_name == 'pull_request' }}
-        with:
-          name: sketches-reports
-          path: sketches-reports/
-          retention-days: 1
-
-      # upload new official test size artifact (for AWS storage)
-      - name: Archive sketch report information
-        uses: actions/upload-artifact@v7
-        if: ${{ github.event_name == 'push' }}
-        with:
-          name: size-reports
-          path: size-reports-${{ needs.build-env.outputs.CORE_HASH }}.tar.bz2
-          retention-days: 1
-          archive: false
-
-      # The last line makes the job fail if the 'result' file does not contain "PASSED".
-      # No further actions are allowed in case of error.
-      - run: |
-          cat result
-          grep -q "PASSED" result # otherwise CI test failed
-
-
-
-  # Clean up test results only if the verification actually passed, so that
-  # they are still available for action re-runs in case of failure.
-
-  clean-temps:
-    name: Clean up test results
+  release:
+    name: Publish GitHub release
     runs-on: ubuntu-latest
-    if: ${{ needs.verify-core.result == 'success' }}
-    needs:
-      - build-env
-      - package-core
-      - verify-core
-    steps:
-
-      - name: Clean up intermediate artifacts
-        uses: geekyeggo/delete-artifact@v6
-        with:
-          name: |
-            build-report-*
-            test-report-*
-          failOnError: false
-
-
-
-  # Upload the built core packages to the S3 bucket for public distribution.
-
-  publish-core:
-    name: Publish core
-    runs-on: ubuntu-latest
-    if: ${{ github.event_name == 'push' && github.repository == 'arduino/ArduinoCore-zephyr' }}
-    needs:
-      - build-env
-      - package-core
-      - verify-core
-    environment: production
+    needs: build-test
+    if: ${{ startsWith(github.ref, 'refs/tags/') && github.event_name != 'pull_request' }}
     permissions:
-      id-token: write
-      contents: read
+      contents: write
     steps:
-
-      - uses: actions/download-artifact@v8
-        with:
-          path: .
-          pattern: ArduinoCore-*
-          merge-multiple: true
-
-      - uses: actions/download-artifact@v8
-        with:
-          path: .
-          pattern: size-reports-*.tar.bz2
-
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v6
-        with:
-          role-to-assume: ${{ secrets.IAM_ROLE }}
-          aws-region: ${{ secrets.AWS_REGION }}
-
-      - name: Upload artifact
-        run: |
-          for f in ArduinoCore-*.tar.bz2 ; do
-            aws s3 cp $f s3://${{ secrets.S3_BUCKET }}/
-          done
-          aws s3 cp size-reports-*.tar.bz2 s3://${{ secrets.S3_BUCKET }}/size-reports/
-
-  # Prepare the package index JSON snippets for the newly built core packages.
-
-  prepare-json:
-    name: Prepare jsons
-    runs-on: ubuntu-latest
-    needs:
-      - build-env
-      - package-core
-      - verify-core
-    env:
-      CORE_TAG: ${{ needs.build-env.outputs.CORE_TAG }}
-      CORE_HASH: ${{ needs.build-env.outputs.CORE_HASH }}
-      ARTIFACTS: ${{ needs.build-env.outputs.ARTIFACTS }}
-    steps:
-
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0
           persist-credentials: false
-          fetch-tags: true
 
-      - uses: actions/download-artifact@v8
+      - uses: oven-sh/setup-bun@v2
+
+      - name: Install Bun dependencies
+        run: bun install --frozen-lockfile
+
+      - uses: actions/setup-go@v6
         with:
-          path: .
-          pattern: ArduinoCore-*
-          merge-multiple: true
+          go-version: stable
+          cache: false
 
-      - name: Prepare package index snippets
+      - name: Install release packaging dependencies
         run: |
-          jq -cr '.[]' <<< ${ARTIFACTS} | while read -r artifact; do
-            # note: the archive names are always hash-based so they use a
-            # predictable pattern. JSON files can use the tag for user-friendliness.
-            ARTIFACT_FILE=ArduinoCore-${artifact}-${CORE_HASH}.tar.bz2
-            PACKAGE_JSON=ArduinoCore-${artifact}-${CORE_TAG}.json
-            ./extra/gen_package_index_json.sh ${artifact} ${ARTIFACT_FILE} ${PACKAGE_JSON}
-          done
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends zip tar
 
-      - name: Archive package index snippets
+      - name: Download core build artifacts
+        uses: actions/download-artifact@v8
+        with:
+          name: sf32lb52-build-${{ needs.build-test.outputs.core_version }}
+          path: release-assets
+
+      - name: Build local Arduino tools
+        run: |
+          bun run scripts/ci/package-tools.ts --out-dir release-assets
+
+      - name: Generate release package indexes
+        run: |
+          CORE_FILE="$(ls release-assets/distrib/ArduinoCore-sf32lb52-*.tar.bz2 | head -n 1)"
+          cp "$CORE_FILE" release-assets/
+          cp release-assets/firmwares/zephyr-sf32lb52_devkit_lcd_sf32lb525uc6.* release-assets/
+          bun run scripts/ci/generate-index.ts \
+            --core "release-assets/$(basename "$CORE_FILE")" \
+            --version "${{ needs.build-test.outputs.core_version }}" \
+            --release-tag "${{ github.ref_name }}" \
+            --repo "${{ github.repository }}" \
+            --tools-dir release-assets \
+            --require-local-tools \
+            --github-out release-assets/package_sifli_index.json \
+            --cn-out release-assets/package_sifli_index_cn.json
+
+      - name: Create or update GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if ! gh release view "${{ github.ref_name }}" >/dev/null 2>&1; then
+            gh release create "${{ github.ref_name }}" \
+              --title "${{ github.ref_name }}" \
+              --notes "SiFli SF32LB52 Arduino Core ${{ needs.build-test.outputs.core_version }}"
+          fi
+          find release-assets -maxdepth 1 -type f -print0 | \
+            xargs -0 gh release upload "${{ github.ref_name }}" --clobber
+
+      - name: Archive release assets
         uses: actions/upload-artifact@v7
         with:
-          name: ArduinoCore-zephyr-${{ env.CORE_TAG }}-jsons
-          path: ArduinoCore-*-${{ env.CORE_TAG }}.json
+          name: sf32lb52-release-${{ github.ref_name }}
+          path: release-assets/
+          retention-days: 7
+
+  mirror:
+    name: Sync China mirror
+    runs-on: ubuntu-latest
+    needs:
+      - build-test
+      - release
+    if: ${{ startsWith(github.ref, 'refs/tags/') && github.event_name != 'pull_request' }}
+    steps:
+      - name: Download release assets
+        uses: actions/download-artifact@v8
+        with:
+          name: sf32lb52-release-${{ github.ref_name }}
+          path: release-assets
+
+      - name: Upload release assets to COS tag prefix
+        uses: OpenSiFli/SiFliMirrorSync@v1
+        with:
+          secret_id: ${{ secrets.COS_DOWNLOAD_SECRET_ID }}
+          secret_key: ${{ secrets.COS_DOWNLOAD_SECRET_KEY }}
+          region: ${{ secrets.COS_DOWNLOAD_REGION }}
+          bucket: ${{ secrets.COS_DOWNLOAD_BUCKET }}
+          prefix: github_assets/${{ github.repository }}/releases/download/${{ github.ref_name }}/
+          artifacts: |
+            release-assets/*.tar.bz2
+            release-assets/*.tar.gz
+            release-assets/*.zip
+            release-assets/*.json
+            release-assets/*.bin
+            release-assets/*.elf
+            release-assets/*.hex
+            release-assets/*.config
+            release-assets/*.dts
+          delete_remote: true
+          flush_url: https://downloads.sifli.com/github_assets/${{ github.repository }}/releases/download/
+
+      - name: Upload release assets to COS latest prefix
+        uses: OpenSiFli/SiFliMirrorSync@v1
+        with:
+          secret_id: ${{ secrets.COS_DOWNLOAD_SECRET_ID }}
+          secret_key: ${{ secrets.COS_DOWNLOAD_SECRET_KEY }}
+          region: ${{ secrets.COS_DOWNLOAD_REGION }}
+          bucket: ${{ secrets.COS_DOWNLOAD_BUCKET }}
+          prefix: github_assets/${{ github.repository }}/releases/latest/download/
+          artifacts: |
+            release-assets/*.tar.bz2
+            release-assets/*.tar.gz
+            release-assets/*.zip
+            release-assets/*.json
+            release-assets/*.bin
+            release-assets/*.elf
+            release-assets/*.hex
+            release-assets/*.config
+            release-assets/*.dts
+          delete_remote: true
+          flush_url: https://downloads.sifli.com/github_assets/${{ github.repository }}/releases/latest/download/
