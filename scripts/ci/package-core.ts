@@ -62,7 +62,7 @@ function main() {
   }
 
   let platformText = readText(join(root, "platform.txt"));
-  platformText = updateProperty(platformText, "name", "SiFli SF32LB52 Boards");
+  platformText = updateProperty(platformText, "name", "SiFli Serial Boards");
   platformText = updateProperty(platformText, "version", version);
 
   const tmp = tempDir("sifli-core-");

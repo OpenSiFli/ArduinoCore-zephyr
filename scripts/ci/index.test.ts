@@ -40,7 +40,10 @@ describe("package index generation", () => {
     });
 
     const sifli = index.packages.find((pkg) => pkg.name === "sifli") as any;
+    expect(sifli.maintainer).toBe("SiFli");
+    expect(sifli.email).toBe("sf-bot@sifli.com");
     expect(sifli.platforms).toHaveLength(1);
+    expect(sifli.platforms[0].name).toBe("SiFli Serial Boards");
     expect(sifli.platforms[0].architecture).toBe("sf32lb52");
     expect(sifli.platforms[0].toolsDependencies).toContainEqual({ packager: "sifli", name: "sftool", version: "0.2.3" });
     expect(sifli.platforms[0].toolsDependencies).toContainEqual({ packager: "zephyr", name: "arm-zephyr-eabi", version: "1.0.1" });

@@ -132,13 +132,13 @@ export function buildPackageIndex(options: GenerateOptions): PackageIndex {
     packages: [
       {
         name: "sifli",
-        maintainer: "OpenSiFli",
+        maintainer: "SiFli",
         websiteURL: "https://github.com/OpenSiFli/ArduinoCore-zephyr",
-        email: "packages@sifli.com",
+        email: "sf-bot@sifli.com",
         help: { online: "https://github.com/OpenSiFli/ArduinoCore-zephyr" },
         platforms: [
           {
-            name: "SiFli SF32LB52 Boards",
+            name: "SiFli Serial Boards",
             architecture: "sf32lb52",
             version: options.version,
             category: "Contributed",
@@ -161,7 +161,7 @@ export function buildPackageIndex(options: GenerateOptions): PackageIndex {
         name: "zephyr",
         maintainer: "The Zephyr Project",
         websiteURL: "https://zephyrproject.org/",
-        email: "packages@sifli.com",
+        email: "sf-bot@sifli.com",
         help: { online: "https://docs.zephyrproject.org/latest/" },
         platforms: [],
         tools: [ZEPHYR_ARM_EABI],
@@ -170,7 +170,7 @@ export function buildPackageIndex(options: GenerateOptions): PackageIndex {
         name: "arduino",
         maintainer: "Arduino",
         websiteURL: "https://www.arduino.cc/",
-        email: "packages@sifli.com",
+        email: "sf-bot@sifli.com",
         help: { online: "https://www.arduino.cc/en/Reference/HomePage" },
         platforms: [],
         tools: arduinoTools,
