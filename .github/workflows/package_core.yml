@@ -231,17 +231,18 @@ jobs:
           bucket: ${{ secrets.COS_DOWNLOAD_BUCKET }}
           prefix: github_assets/${{ github.repository }}/releases/download/${{ github.ref_name }}/
           artifacts: |
-            release-assets/*.tar.bz2
-            release-assets/*.tar.gz
-            release-assets/*.zip
-            release-assets/*.json
-            release-assets/*.bin
-            release-assets/*.elf
-            release-assets/*.hex
-            release-assets/*.config
-            release-assets/*.dts
+            *.tar.bz2
+            *.tar.gz
+            *.zip
+            *.json
+            *.bin
+            *.elf
+            *.hex
+            *.config
+            *.dts
           delete_remote: true
           flush_url: https://downloads.sifli.com/github_assets/${{ github.repository }}/releases/download/
+          working_directory: release-assets
           global: true
 
       - name: Upload release assets to COS latest prefix
@@ -253,15 +254,16 @@ jobs:
           bucket: ${{ secrets.COS_DOWNLOAD_BUCKET }}
           prefix: github_assets/${{ github.repository }}/releases/latest/download/
           artifacts: |
-            release-assets/*.tar.bz2
-            release-assets/*.tar.gz
-            release-assets/*.zip
-            release-assets/*.json
-            release-assets/*.bin
-            release-assets/*.elf
-            release-assets/*.hex
-            release-assets/*.config
-            release-assets/*.dts
+            *.tar.bz2
+            *.tar.gz
+            *.zip
+            *.json
+            *.bin
+            *.elf
+            *.hex
+            *.config
+            *.dts
           delete_remote: true
           flush_url: https://downloads.sifli.com/github_assets/${{ github.repository }}/releases/latest/download/
+          working_directory: release-assets
           global: true
