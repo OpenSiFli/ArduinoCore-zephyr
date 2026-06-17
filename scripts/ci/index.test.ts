@@ -3,7 +3,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { buildPackageIndex, buildSftoolFromArchives, mirrorPackageIndex, toChinaMirrorUrl } from "./generate-index";
-import { getBoard } from "./lib";
+import { getBoard, readText } from "./lib";
 import { SFTOOL, ZEPHYR_ARM_EABI, sftoolPackageArchiveName } from "./tool-manifest";
 
 describe("package index generation", () => {
@@ -51,6 +51,9 @@ describe("package index generation", () => {
     expect(board.target).toBe("sf32lb52_devkit_lcd");
     expect(board.artifact).toBe("sf32lb52");
     expect(board.subarch).toBe("sf32lb52");
+    expect(readText("boards.txt")).toContain(
+      "sf32lb52devkitlcd.build.compiler_path={runtime.tools.arm-zephyr-eabi-1.0.1.path}/bin/",
+    );
   });
 
   test("maps sftool 0.2.3 release assets to sifli tool systems", () => {
