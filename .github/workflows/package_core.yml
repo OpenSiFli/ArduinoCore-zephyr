@@ -79,7 +79,7 @@ jobs:
             --core "${{ steps.package.outputs.core_file }}" \
             --version "$CORE_VERSION" \
             --release-tag "$CORE_VERSION" \
-            --asset-base-url "file://${PWD}/distrib" \
+            --asset-base-url "http://127.0.0.1:8765" \
             --github-out distrib/package_sifli_index.json \
             --cn-out distrib/package_sifli_index_cn.json
 
@@ -87,7 +87,21 @@ jobs:
 
       - name: Compile Blink with Arduino CLI
         run: |
-          INDEX_URL="file://${PWD}/distrib/package_sifli_index.json"
+          python3 -m http.server 8765 --bind 127.0.0.1 --directory distrib >/tmp/sifli-package-server.log 2>&1 &
+          SERVER_PID=$!
+          trap 'kill "$SERVER_PID"' EXIT
+
+          PACKAGE_SERVER="http://127.0.0.1:8765"
+          for _ in {1..10}; do
+            wget -qO /dev/null "${PACKAGE_SERVER}/package_sifli_index.json" && break
+            sleep 1
+          done
+          if ! wget -qO /dev/null "${PACKAGE_SERVER}/package_sifli_index.json"; then
+            cat /tmp/sifli-package-server.log
+            exit 1
+          fi
+
+          INDEX_URL="${PACKAGE_SERVER}/package_sifli_index.json"
           arduino-cli config init --overwrite
           arduino-cli core update-index --additional-urls "$INDEX_URL"
           arduino-cli core install sifli:sf32lb52 --additional-urls "$INDEX_URL"
