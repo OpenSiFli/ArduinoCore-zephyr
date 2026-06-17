@@ -82,11 +82,14 @@ function main() {
   remove(join(staged, "variants", variant, "llext-edk", "cmake.cflags"));
 
   const firmwarePrefix = `zephyr-${variant}.`;
+  const bootloaderFile = `zephyr-${variant}.bin`;
   const firmwares = readdirSync(join(root, "firmwares")).filter((name) => name.startsWith(firmwarePrefix));
   if (firmwares.length === 0) throw new Error(`No firmware artifacts found for ${variant}`);
+  if (!firmwares.includes(bootloaderFile)) throw new Error(`Missing bootloader firmware ${bootloaderFile}`);
   for (const name of firmwares) {
     copyPath(join(root, "firmwares", name), join(staged, "firmwares", name));
   }
+  copyPath(join(root, "firmwares", bootloaderFile), join(staged, "bootloaders", bootloaderFile));
 
   ensureDir(join(root, "distrib"));
   ensureDir(dirname(out));
