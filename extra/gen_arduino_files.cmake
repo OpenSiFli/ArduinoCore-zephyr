@@ -32,8 +32,30 @@ foreach(variant ${VARIANTS})
 	message(STATUS "Processing ${variant}")
 	include(${dir}/llext-edk/cmake.cflags)
 
-	list(TRANSFORM LLEXT_ALL_INCLUDE_CFLAGS REPLACE "-I${dir}" "-iwithprefixbefore")
-	list(JOIN LLEXT_ALL_INCLUDE_CFLAGS "\n" EDK_INCLUDES)
+	set(edk_include_flags ${LLEXT_ALL_INCLUDE_CFLAGS})
+	set(arduino_api_include_flags ${edk_include_flags})
+	list(FILTER arduino_api_include_flags INCLUDE REGEX "-I.*/include/modules/lib/Arduino-Zephyr-API/")
+	list(FILTER edk_include_flags EXCLUDE REGEX "-I.*/include/modules/lib/Arduino-Zephyr-API/")
+
+	set(reordered_edk_include_flags "")
+	set(inserted_arduino_api_includes FALSE)
+	foreach(flag IN LISTS edk_include_flags)
+		# Keep Arduino API headers ahead of HAL headers so Windows does not
+		# resolve <SPI.h> to the CMSIS spi.h from the HAL package.
+		if(NOT inserted_arduino_api_includes AND flag MATCHES "-I.*/include/modules/hal/")
+			list(APPEND reordered_edk_include_flags ${arduino_api_include_flags})
+			set(inserted_arduino_api_includes TRUE)
+		endif()
+
+		list(APPEND reordered_edk_include_flags ${flag})
+	endforeach()
+
+	if(NOT inserted_arduino_api_includes)
+		list(APPEND reordered_edk_include_flags ${arduino_api_include_flags})
+	endif()
+
+	list(TRANSFORM reordered_edk_include_flags REPLACE "-I${dir}" "-iwithprefixbefore")
+	list(JOIN reordered_edk_include_flags " " EDK_INCLUDES)
 	file(WRITE ${dir}/includes.txt "${EDK_INCLUDES}")
 
 	# exclude -imacros entries in platform from the list, make sure no others are present
@@ -55,10 +77,14 @@ foreach(variant ${VARIANTS})
 	list(FILTER LLEXT_BASE_CXXFLAGS EXCLUDE REGEX "-std=c.*")
 
 	# save flag files
-	list(JOIN LLEXT_BASE_CFLAGS "\n" EDK_CFLAGS)
+	# LLEXT_BASE_CFLAGS comes from a serialized CMake string that may contain
+	# quoted semicolon-separated sublists. Strip quotes first, then flatten the
+	# semicolons into spaces so Arduino IDE passes each flag as a separate arg.
+	string(REPLACE "'" "" EDK_CFLAGS "${LLEXT_BASE_CFLAGS}")
+	string(REPLACE ";" " " EDK_CFLAGS "${EDK_CFLAGS}")
 	file(WRITE ${dir}/cflags.txt "${EDK_CFLAGS}")
 
-
-	list(JOIN LLEXT_BASE_CXXFLAGS "\n" EDK_CXXFLAGS)
+	string(REPLACE "'" "" EDK_CXXFLAGS "${LLEXT_BASE_CXXFLAGS}")
+	string(REPLACE ";" " " EDK_CXXFLAGS "${EDK_CXXFLAGS}")
 	file(WRITE ${dir}/cxxflags.txt "${EDK_CXXFLAGS}")
 endforeach()
