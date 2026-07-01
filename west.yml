@@ -24,7 +24,7 @@ manifest:
     - name: zephyr
       remote: OpenSiFli
       repo-path: zephyr-downstream
-      revision: 7c31bd523fd9effd599e573da1258e5a01d86755
+      revision: 7840e8af8bcb19199063a048ccebcf56f803169a
       import:
         name-allowlist:
           - cmsis
