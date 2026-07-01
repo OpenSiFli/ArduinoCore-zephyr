@@ -6,10 +6,10 @@
 
 #pragma once
 
-#define MOSI 14
-#define MISO 15
-#define SCK 18
-#define SS 19
-#define SDA 22
-#define SCL 20
-#define LED_BUILTIN 16
+#define MOSI         14
+#define MISO         15
+#define SCK          17
+#define SS           18
+#define SDA          16
+#define SCL          19
+#define LED_BUILTIN  13
